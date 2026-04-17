@@ -1,0 +1,42 @@
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Scraped output
+output/*.csv
+output/*.json
+!output/.gitkeep
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment variables / secrets
+.env
+.env.local
+*.pem
+credentials.json
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
