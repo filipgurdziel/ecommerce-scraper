@@ -43,7 +43,7 @@ Summary stats from a full run:
 ## Usage
 
 ```bash
-git clone git@github.com:yourusername/ecommerce-scraper.git
+git clone git@github.com:filipgurdziel/ecommerce-scraper.git
 cd ecommerce-scraper
 python3 -m venv venv
 source venv/bin/activate
