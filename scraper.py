@@ -1,12 +1,12 @@
 """
-E-commerce product scraper for The Works (theworks.co.uk)
-Extracts product data from category pages with pagination support.
+Book scraper for books.toscrape.com
+Extracts all books across all category pages with title, price,
+rating, stock status, and detail page URL.
 """
 
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import json
 import time
 import logging
 from pathlib import Path
@@ -16,20 +16,21 @@ from urllib.parse import urljoin
 from tqdm import tqdm
 
 # --- Config ---
-BASE_URL = "https://www.theworks.co.uk"
-CATEGORY_URL = "https://www.theworks.co.uk/c/books"
+BASE_URL = "https://books.toscrape.com/"
+START_URL = "https://books.toscrape.com/catalogue/page-1.html"
 OUTPUT_DIR = Path("output")
-REQUEST_DELAY = 1.5  # seconds between requests — be polite
-MAX_PAGES = 5  # cap for portfolio demo; remove for full scrape
+REQUEST_DELAY = 0.5  # seconds between requests
+MAX_PAGES = 50  # site has exactly 50 pages
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "en-GB,en;q=0.9",
 }
+
+RATING_MAP = {"One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,14 +40,13 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
-class Product:
+class Book:
     title: str
-    price: Optional[float]
-    original_price: Optional[float]
-    discount_pct: Optional[float]
+    price_gbp: float
+    rating: int
     in_stock: bool
     url: str
-    image_url: Optional[str]
+    image_url: str
     scraped_at: str
 
 
@@ -69,111 +69,92 @@ class Scraper:
         log.error(f"Giving up on {url}")
         return None
 
-    def parse_product_card(self, card) -> Optional[Product]:
-        """Extract product data from a single product card element.
-        
-        NOTE: selectors will need adjusting based on the site's actual HTML.
-        Run this once, inspect the output, and tweak.
-        """
+    def parse_book(self, card, page_url: str) -> Optional[Book]:
+        """Extract book data from a single product_pod element."""
         try:
-            title_el = card.select_one("[data-testid='product-title'], .product-title, h3 a")
-            title = title_el.get_text(strip=True) if title_el else None
+            title_el = card.select_one("h3 a")
+            title = title_el["title"] if title_el else None
 
-            link_el = card.select_one("a[href*='/p/']")
-            url = urljoin(BASE_URL, link_el["href"]) if link_el else None
+            relative_url = title_el["href"] if title_el else None
+            url = urljoin(page_url, relative_url) if relative_url else None
 
-            price_el = card.select_one(".price-now, .product-price, [data-testid='price']")
-            price = self._parse_price(price_el.get_text() if price_el else None)
+            price_text = card.select_one("p.price_color").get_text(strip=True)
+            # Strip currency symbol and any non-numeric chars
+            price = float("".join(c for c in price_text if c.isdigit() or c == "."))
 
-            original_el = card.select_one(".price-was, .original-price, del")
-            original = self._parse_price(original_el.get_text() if original_el else None)
+            rating_el = card.select_one("p.star-rating")
+            rating_word = rating_el["class"][1] if rating_el else None
+            rating = RATING_MAP.get(rating_word, 0)
 
-            discount = None
-            if price and original and original > price:
-                discount = round((original - price) / original * 100, 1)
+            stock_el = card.select_one("p.instock.availability")
+            in_stock = "in stock" in stock_el.get_text(strip=True).lower() if stock_el else False
 
-            img_el = card.select_one("img")
-            image_url = img_el.get("src") or img_el.get("data-src") if img_el else None
+            img_el = card.select_one("img.thumbnail")
+            image_url = urljoin(page_url, img_el["src"]) if img_el else None
 
-            stock_el = card.select_one(".out-of-stock, .stock-status")
-            in_stock = not (stock_el and "out" in stock_el.get_text(strip=True).lower())
-
-            if not title or not url:
-                return None
-
-            return Product(
+            return Book(
                 title=title,
-                price=price,
-                original_price=original,
-                discount_pct=discount,
+                price_gbp=price,
+                rating=rating,
                 in_stock=in_stock,
                 url=url,
                 image_url=image_url,
                 scraped_at=pd.Timestamp.utcnow().isoformat(),
             )
         except Exception as e:
-            log.warning(f"Failed to parse card: {e}")
+            log.warning(f"Failed to parse book card: {e}")
             return None
 
-    @staticmethod
-    def _parse_price(text: Optional[str]) -> Optional[float]:
-        if not text:
-            return None
-        cleaned = "".join(c for c in text if c.isdigit() or c == ".")
-        try:
-            return float(cleaned) if cleaned else None
-        except ValueError:
-            return None
-
-    def scrape_category(self, start_url: str, max_pages: int = 5) -> list[Product]:
-        """Scrape a category with pagination."""
-        products = []
+    def scrape_all(self, start_url: str, max_pages: int) -> list[Book]:
+        """Scrape all pages, following the 'next' link."""
+        books = []
         current_url = start_url
 
         for page_num in tqdm(range(1, max_pages + 1), desc="Pages"):
-            log.info(f"Scraping page {page_num}: {current_url}")
             soup = self.fetch(current_url)
             if not soup:
                 break
 
-            cards = soup.select("[data-testid='product-card'], .product-card, .product-item")
-            log.info(f"Found {len(cards)} product cards on page {page_num}")
-
+            cards = soup.select("article.product_pod")
             for card in cards:
-                product = self.parse_product_card(card)
-                if product:
-                    products.append(product)
+                book = self.parse_book(card, current_url)
+                if book:
+                    books.append(book)
 
-            next_link = soup.select_one("a[rel='next'], .pagination-next a")
-            if not next_link or not next_link.get("href"):
-                log.info("No more pages")
+            next_link = soup.select_one("li.next a")
+            if not next_link:
+                log.info(f"No more pages after page {page_num}")
                 break
-            current_url = urljoin(BASE_URL, next_link["href"])
+            current_url = urljoin(current_url, next_link["href"])
 
-        return products
+        return books
 
 
-def save_output(products: list[Product]):
+def save_output(books: list[Book]):
     OUTPUT_DIR.mkdir(exist_ok=True)
-    df = pd.DataFrame([asdict(p) for p in products])
+    df = pd.DataFrame([asdict(b) for b in books])
 
-    csv_path = OUTPUT_DIR / "products.csv"
-    json_path = OUTPUT_DIR / "products.json"
+    csv_path = OUTPUT_DIR / "books.csv"
+    json_path = OUTPUT_DIR / "books.json"
 
     df.to_csv(csv_path, index=False, encoding="utf-8")
     df.to_json(json_path, orient="records", indent=2, force_ascii=False)
 
-    log.info(f"Saved {len(products)} products to {csv_path} and {json_path}")
-    log.info(f"\nSummary:\n{df.describe(include='all')}")
+    log.info(f"Saved {len(books)} books to {csv_path} and {json_path}")
+    log.info(f"\nStats:")
+    log.info(f"  Total books:    {len(df)}")
+    log.info(f"  Avg price:      £{df['price_gbp'].mean():.2f}")
+    log.info(f"  Avg rating:     {df['rating'].mean():.2f} / 5")
+    log.info(f"  In stock:       {df['in_stock'].sum()} / {len(df)}")
 
 
 def main():
     scraper = Scraper()
-    products = scraper.scrape_category(CATEGORY_URL, max_pages=MAX_PAGES)
-    if products:
-        save_output(products)
+    books = scraper.scrape_all(START_URL, max_pages=MAX_PAGES)
+    if books:
+        save_output(books)
     else:
-        log.error("No products scraped. Check your selectors.")
+        log.error("No books scraped. Something went wrong.")
 
 
 if __name__ == "__main__":

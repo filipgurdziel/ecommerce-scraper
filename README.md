@@ -23,3 +23,6 @@ python scraper.py
 
 ## Responsible scraping
 This scraper respects robots.txt, uses polite rate limiting, identifies itself with a standard User-Agent, and scrapes only publicly accessible data.
+
+## Sample output
+![Sample CSV Output](sample_output.png)

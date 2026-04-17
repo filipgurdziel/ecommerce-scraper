@@ -19,6 +19,7 @@ __pycache__/
 output/*.csv
 output/*.json
 !output/.gitkeep
+!output/sample_books.csv
 
 # IDE / editor
 .vscode/
