@@ -1,37 +1,49 @@
 # E-commerce Product Scraper
 
-**Scrapes all 1000 books across 50 pages from [books.toscrape.com](https://books.toscrape.com) in under a minute**, with automatic pagination, retry logic, and clean CSV/JSON output.
+A production-ready two-stage concurrent scrapter that extracts 16 fields per book across 1000 products.
 
-Built as a demonstration of production-quality scraping patterns; easily adaptable to real e-commerce sites (price monitoring, stock tracking, catalog extraction).
+Demonstrated on [books.toscrape.com](https://books.toscrape.com) — successfully scraped all 1000 books across 50 pages in under a minute.
+
+## Features
+- Extracts title, price, rating (1-5 stars), stock status, product URL, and image URL
+- After extracting basic details (from listing page), extracts richer information from individual book pages
+- Extracting from individual book pages concurrently
+- Automatic pagination - follows the site's "next" link until the last page
+- Retry logic with exponential backoff (handles transient network failures)
+- Polite rate limiting (configurable delay between requests)
+- Structured logging with timestamps and severity levels
+- Outputs both CSV and JSON for downstream use
+- Graceful degradation - one malformed product doesn't kill the scrape
+
+## Pipeline
+- Stage 1 (listings); visit category pages, scrape the basics (title, price, star ratings, stock yes/no, cover image, and the URL)
+- Stage 2 (detailed); visit each individual book page, scrape more information (full description, UPC code, tax breakdown, exact stock count, number of reviews, category), then merge back into book object.
+
 
 ## Sample output
 
 ![Sample CSV output](sample_output.png)
 
-- **Books scraped:** 1000
+Summary stats from a full run:
+- **Total books scraped:** 1000
 - **Pages processed:** 50
-- **Runtime:** ~45 seconds
-- **Output formats:** CSV + JSON
-
-## Features
-
-- Extracts title, price (GBP), star rating (1-5), stock status, product URL, image URL
-- Automatic pagination; follows the site's "next" link until the last page
-- Retry logic with exponential backoff for transient network failures
-- Polite rate limiting (0.5s between requests, configurable)
-- Structured logging with timestamps and severity levels
-- Graceful degradation; one malformed product doesn't kill the scrape
-- Session reuse for faster HTTP throughput
-- Type-hinted, dataclass-based code for maintainability
+- **Avg price:** £35.07
+- **Avg rating:** 2.92 / 5
+- **Runtime:** ~35 seconds
 
 ## Tech stack
-
-Python 3.12 · requests · BeautifulSoup4 · lxml · pandas · tqdm
+- Python 3.12
+- `requests` - HTTP client with session reuse
+- `BeautifulSoup4` + `lxml` - fast HTML parsing
+- `pandas` - data output to CSV/JSON
+- `tqdm` - progress indicator
+- `dataclasses` + type hints for clean, maintainable code
+- `concurrent.features` - concurrency, allows extracting multiple items at the same time
 
 ## Usage
 
 ```bash
-git clone https://github.com/filipgurdziel/ecommerce-scraper.git
+git clone git@github.com:yourusername/ecommerce-scraper.git
 cd ecommerce-scraper
 python3 -m venv venv
 source venv/bin/activate
