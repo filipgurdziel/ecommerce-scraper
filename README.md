@@ -81,4 +81,4 @@ If adapting for production use, ensure compliance with the target site's Terms o
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT - see [LICENSE](LICENSE)
