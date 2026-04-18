@@ -4,6 +4,10 @@ A production-ready two-stage concurrent scrapter that extracts 16 fields per boo
 
 Demonstrated on [books.toscrape.com](https://books.toscrape.com) — successfully scraped all 1000 books across 50 pages in under a minute.
 
+## Analysis
+
+See [`analysis.ipynb`](analysis.ipynb) for an exploratory data analysis of the scraped dataset; data quality validation, price and rating distributions, category patterns, stock insights, and outlier checks.
+
 ## Features
 - Extracts title, price, rating (1-5 stars), stock status, product URL, and image URL
 - After extracting basic details (from listing page), extracts richer information from individual book pages
